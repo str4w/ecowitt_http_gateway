@@ -72,10 +72,14 @@ $device = "auto";  	# Use 'auto' for automatic name from PASSKEY else uses the n
 $json_data_log = 1; 	# Activate the export to JSON. Set always to 1 
 $txt_data_log = 0; 	# Activate the export to .csv
 $fhem_data_log = 0; 	# Activate the forward to FHEM server
+$tb_data_log = 1;       # Activate the forward to Thingsboard server
 $forward_data = 0; 	# Activate the forward to Meteotemplate web site
 $txt_mnw = 0; 		# Activate the FTP for the Meteonetwork string
 $txt_weewx = 0;         # Activate the export to .txt for weewx driver
 $ws80_temperature_correction = 0; # Activate the temperature correction method based on Energy balance only for WS80
+# Settings: Thingsboard
+$access_token = "access_token_here";
+$tb_url = "http://127.0.0.1:8080/api/v1/$access_token/telemetry";
 
 # Settings: FHEM
 $FHEM_server = "127.0.0.1";
@@ -163,34 +167,34 @@ $f_in_mm = 25.4;
     $weather_data['dateutc'] = gmdate("Y-m-d\TH:i:s\Z");
 
     # Batteries
-    if ( $weather_data['wh80batt'] < 2.5 )
-    { 	
-	@$weather_data['windBatteryStatus'] = 1.0 ;
-    } 
-    if ( $weather_data['wh80batt'] > 2.5 )
-    { 	
-	@$weather_data['windBatteryStatus'] = 0.0 ;
-    } 
+    #if ( $weather_data['wh80batt'] < 2.5 )
+    #{ 	
+    #	 @$weather_data['windBatteryStatus'] = 1.0 ;
+    #} 
+    #if ( $weather_data['wh80batt'] > 2.5 )
+    #{ 	
+    #	@$weather_data['windBatteryStatus'] = 0.0 ;
+    #} 
     @$weather_data['consBatteryVoltage'] = $weather_data['wh80batt'] ;
 
-    if ( $weather_data['wh40batt'] < 1.0 )
-    {
-        @$weather_data['rainBatteryStatus'] = 1.0 ;
-    }
-    if ( $weather_data['wh40batt'] > 1.0 )
-    {
-        @$weather_data['rainBatteryStatus'] = 0.0 ;
-    }
+    #if ( $weather_data['wh40batt'] < 1.0 )
+    #{
+    #    @$weather_data['rainBatteryStatus'] = 1.0 ;
+    #}
+    #if ( $weather_data['wh40batt'] > 1.0 )
+    #{
+    #    @$weather_data['rainBatteryStatus'] = 0.0 ;
+    #}
     @$weather_data['supplyVoltage'] = $weather_data['wh40batt'] ;
 
-    if ( $weather_data['soilbatt1'] < 1.0 )
-    {
-        @$weather_data['txBatteryStatus'] = 1.0 ;
-    }
-    if ( $weather_data['soilbatt1'] > 1.0 )
-    {
-        @$weather_data['txBatteryStatus'] = 0.0 ;
-    }
+    #if ( $weather_data['soilbatt1'] < 1.0 )
+    #{
+    #    @$weather_data['txBatteryStatus'] = 1.0 ;
+    #}
+    #if ( $weather_data['soilbatt1'] > 1.0 )
+    #{
+    #    @$weather_data['txBatteryStatus'] = 0.0 ;
+    #}
     @$weather_data['heatingVoltage'] = $weather_data['soilbatt1'] ;
 
     @$weather_data['outTempBatteryStatus'] = $weather_data['batt1'] ;
@@ -395,7 +399,7 @@ if ( $forward_data == 1 )
     	@$weather_data_forward['UV'] = $weather_data['uv'] ;
     	@$weather_data_forward['TIN'] = $weather_data['tempinc'] ;
     	@$weather_data_forward['HIN'] = $weather_data['humidityin'] ;
-    	@$weather_data_forward['T1'] = $weather_data['temp1c'] ;
+	@$weather_data_forward['T1'] = $weather_data['temp1c'] ;
     	@$weather_data_forward['H1'] = $weather_data['humidity1'] ;
     	@$weather_data_forward['T2'] = $weather_data['temp2c'] ;
     	@$weather_data_forward['H2'] = $weather_data['humidity2'] ;
@@ -467,6 +471,52 @@ if ( $txt_data_log == 1 )
 	$file = fopen($txt_data_logfile, 'a');
 	fputcsv($file, $weather_data);
 	fclose($file);
+}
+
+# Write data to TB
+if ( $tb_data_log == 1 ) 
+{
+    $tb_data['dateutc'] = $weather_data['dateutc'];
+    $tb_data['in_temp'] = $weather_data['tempinc'];
+    $tb_data['ex_temp'] = $weather_data['tempc'];
+    $tb_data['in_humidity'] = $weather_data['humidityin'];
+    $tb_data['ex_humidity'] = $weather_data['humidity'];
+    $tb_data['winddir'] = $weather_data['winddir'];
+    $tb_data['solarradiation'] = $weather_data['solarradiation'];
+    $tb_data['uv'] = $weather_data['uv'];
+    $tb_data['windgustkmh'] = $weather_data['windgustkmh'];
+    $tb_data['windspeedkmh'] = $weather_data['windspeedkmh'];
+    $tb_data['rainmm'] = $weather_data['rainmm'];
+    $tb_data['dailyrainmm'] = $weather_data['dailyrainmm'];
+    $tb_data['weeklyrainmm'] = $weather_data['weeklyrainmm'];
+    $tb_data['monthlyrainmm'] = $weather_data['monthlyrainmm'];
+    $tb_data['yearlyrainmm'] = $weather_data['yearlyrainmm'];
+    $tb_data['rainratemm'] = $weather_data['rainratemm'];
+    $tb_data['baromabshpa'] = $weather_data['baromabshpa'];
+    $tb_data['baromrelhpa'] = $weather_data['baromrelhpa'];
+    #$tb_data['windBatteryStatus'] = $weather_data['windBatteryStatus'];
+
+
+    $tb_data_json = json_encode($tb_data);
+    # Create a new cURL resource
+    $ch = curl_init($tb_url);
+
+    # Attach encoded JSON string to the POST fields
+    curl_setopt($ch, CURLOPT_POSTFIELDS, $tb_data_json);
+
+    # Set the content type to application/json
+    curl_setopt($ch, CURLOPT_HTTPHEADER, array('Content-Type:application/json'));
+
+    # Return response instead of outputting
+    curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+
+    # Execute the POST request
+    $result = curl_exec($ch);
+    #error_log($tb_url);
+    #error_log($result);
+
+    # Close cURL resource
+    curl_close($ch);
 }
 
 # Write data to FHEM
